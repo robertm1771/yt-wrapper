@@ -27,9 +27,10 @@
             background: #111;
             display: flex;
             gap: 12px;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             box-sizing: border-box;
             align-items: center;
+            overflow-x: auto;
         }
 
         #controls input {
@@ -85,6 +86,10 @@
             font-size: 12px;
             color: #8f8;
             min-height: 16px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1 1 200px;
         }
 
         #layout {
@@ -288,7 +293,7 @@ function restoreRightPanels() {
         if (url2) setFrameSrc("frame2", url2);
 
         if (url1 || url2) {
-            showStatus("Restored right-side frames.");
+            showStatus("Restored right-side panels.");
         }
     } catch (e) {
         console.warn("Unable to restore right panel URLs", e);
@@ -402,11 +407,7 @@ function loadOther() {
 
     persistRightPanels(url1, url2);
 
-    if (!url1 && !url2) {
-        showStatus("Right-side frames cleared.");
-    } else {
-        showStatus("Right-side frames loaded.");
-    }
+    showStatus(!url1 && !url2 ? "Right side cleared." : "Right side loaded.");
 }
 
 function refreshYouTube() {
@@ -416,14 +417,14 @@ function refreshYouTube() {
 
     if (current) {
         setFrameSrc("ytFrame", current);
-        showStatus("YouTube frame refreshed.");
+        showStatus("YouTube refreshed.");
         return;
     }
 
     const embed = convertToEmbedded(input);
     if (embed) {
         setFrameSrc("ytFrame", embed);
-        showStatus("YouTube frame loaded and refreshed.");
+        showStatus("YouTube loaded and refreshed.");
     } else {
         showStatus("Nothing to refresh for YouTube.", true);
     }
@@ -441,7 +442,7 @@ function refreshRightFrames() {
     if (url1) setFrameSrc("frame1", url1);
     if (url2) setFrameSrc("frame2", url2);
 
-    showStatus("Right-side frames refreshed.");
+    showStatus("Right side refreshed.");
 }
 
 // Enter key auto-load for YouTube
