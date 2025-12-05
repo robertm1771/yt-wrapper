@@ -91,12 +91,14 @@
         <div>
             <input id="ytInput" type="text" placeholder="Paste YouTube link here (watch, live, or youtu.be)">
             <button onclick="loadYouTube()">Load YouTube</button>
+            <button onclick="refreshYouTube()">Refresh YouTube</button>
         </div>
 
         <div>
             <input id="url1" type="text" placeholder="Right top URL">
             <input id="url2" type="text" placeholder="Right bottom URL">
             <button onclick="loadOther()">Load Right Frames</button>
+            <button onclick="refreshRightFrames()">Refresh Right Frames</button>
         </div>
 
         <div id="status" aria-live="polite"></div>
@@ -157,6 +159,52 @@ function convertToEmbedded(url) {
     return url;
 }
 
+function setFrameSrc(frameId, url) {
+    const frame = document.getElementById(frameId);
+    const target = url || "about:blank";
+    const current = frame.getAttribute("src") || "";
+
+    // Force reload even if the same URL is entered again.
+    if (current === target) {
+        frame.src = "about:blank";
+        requestAnimationFrame(() => frame.src = target);
+    } else {
+        frame.src = target;
+    }
+}
+
+const RIGHT_PANELS_KEY = "yt-wrapper:right-panels";
+
+function persistRightPanels(url1, url2) {
+    const payload = { url1, url2 };
+    try {
+        localStorage.setItem(RIGHT_PANELS_KEY, JSON.stringify(payload));
+    } catch (e) {
+        console.warn("Unable to persist right panel URLs", e);
+    }
+}
+
+function restoreRightPanels() {
+    try {
+        const raw = localStorage.getItem(RIGHT_PANELS_KEY);
+        if (!raw) return;
+
+        const { url1 = "", url2 = "" } = JSON.parse(raw);
+
+        document.getElementById("url1").value = url1;
+        document.getElementById("url2").value = url2;
+
+        if (url1) setFrameSrc("frame1", url1);
+        if (url2) setFrameSrc("frame2", url2);
+
+        if (url1 || url2) {
+            showStatus("Restored right-side frames.");
+        }
+    } catch (e) {
+        console.warn("Unable to restore right panel URLs", e);
+    }
+}
+
 function loadYouTube() {
     const raw = document.getElementById("ytInput").value;
     const embed = convertToEmbedded(raw);
@@ -165,7 +213,7 @@ function loadYouTube() {
         return showStatus("Please enter a YouTube link first.", true);
     }
 
-    document.getElementById("ytFrame").src = embed;
+    setFrameSrc("ytFrame", embed);
     showStatus("YouTube video loaded.");
 }
 
@@ -173,14 +221,51 @@ function loadOther() {
     const url1 = document.getElementById("url1").value.trim();
     const url2 = document.getElementById("url2").value.trim();
 
-    document.getElementById("frame1").src = url1 || "about:blank";
-    document.getElementById("frame2").src = url2 || "about:blank";
+    setFrameSrc("frame1", url1);
+    setFrameSrc("frame2", url2);
+
+    persistRightPanels(url1, url2);
 
     if (!url1 && !url2) {
         showStatus("Right-side frames cleared.");
     } else {
         showStatus("Right-side frames loaded.");
     }
+}
+
+function refreshYouTube() {
+    const ytFrame = document.getElementById("ytFrame");
+    const current = ytFrame.getAttribute("src");
+    const input = document.getElementById("ytInput").value.trim();
+
+    if (current) {
+        setFrameSrc("ytFrame", current);
+        showStatus("YouTube frame refreshed.");
+        return;
+    }
+
+    const embed = convertToEmbedded(input);
+    if (embed) {
+        setFrameSrc("ytFrame", embed);
+        showStatus("YouTube frame loaded and refreshed.");
+    } else {
+        showStatus("Nothing to refresh for YouTube.", true);
+    }
+}
+
+function refreshRightFrames() {
+    const url1 = document.getElementById("frame1").getAttribute("src") || document.getElementById("url1").value.trim();
+    const url2 = document.getElementById("frame2").getAttribute("src") || document.getElementById("url2").value.trim();
+
+    if (!url1 && !url2) {
+        showStatus("Nothing to refresh on right side.", true);
+        return;
+    }
+
+    if (url1) setFrameSrc("frame1", url1);
+    if (url2) setFrameSrc("frame2", url2);
+
+    showStatus("Right-side frames refreshed.");
 }
 
 // Enter key auto-load for YouTube
@@ -202,6 +287,8 @@ function showStatus(message, isError = false) {
     el.textContent = message;
     el.style.color = isError ? "#f55" : "#8f8";
 }
+
+restoreRightPanels();
 </script>
 
 </body>
