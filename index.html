@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3-Panel YouTube + URL Loader</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+
+        #controls {
+            padding: 10px;
+            background: #111;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            box-sizing: border-box;
+        }
+
+        #controls input {
+            width: 280px;
+            padding: 5px;
+            background: #000;
+            border: 1px solid #444;
+            color: #fff;
+            font-size: 12px;
+        }
+
+        #controls button {
+            padding: 6px 12px;
+            border: 1px solid #444;
+            background: #222;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        #controls button:hover {
+            background: #333;
+        }
+
+        #layout {
+            height: calc(100% - 60px);
+            display: grid;
+            grid-template-columns: 2fr 1fr; /* left big, right smaller */
+        }
+
+        .right-pane {
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            height: 100%;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <input id="ytInput" type="text" placeholder="Paste YouTube link here">
+        <button onclick="loadYouTube()">Load YouTube</button>
+
+        <input id="url1" type="text" placeholder="Right top URL">
+        <input id="url2" type="text" placeholder="Right bottom URL">
+        <button onclick="loadOther()">Load Right Frames</button>
+    </div>
+
+    <div id="layout">
+        <!-- NOTE: referrerpolicy added here -->
+        <iframe
+            id="ytFrame"
+            allowfullscreen
+            referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
+
+        <div class="right-pane">
+            <iframe id="frame1"></iframe>
+            <iframe id="frame2"></iframe>
+        </div>
+    </div>
+
+<script>
+function convertToEmbedded(url) {
+    if (!url) return "";
+
+    url = url.trim();
+
+    // Already embed
+    if (url.includes("youtube.com/embed/") || url.includes("youtube-nocookie.com/embed/")) {
+        return url;
+    }
+
+    try {
+        const u = new URL(url);
+
+        // Standard watch URL
+        if (u.hostname.includes("youtube.com") && u.pathname === "/watch") {
+            const id = u.searchParams.get("v");
+            if (id) return "https://www.youtube-nocookie.com/embed/" + id;
+        }
+
+        // youtu.be short link
+        if (u.hostname === "youtu.be") {
+            const id = u.pathname.replace("/", "");
+            if (id) return "https://www.youtube-nocookie.com/embed/" + id;
+        }
+
+        // Live URL
+        if (u.hostname.includes("youtube.com") && u.pathname.startsWith("/live/")) {
+            const id = u.pathname.split("/")[2];
+            if (id) return "https://www.youtube-nocookie.com/embed/" + id;
+        }
+    } catch (e) {
+        console.error("Invalid URL:", e);
+    }
+
+    // Fallback
+    return url;
+}
+
+function loadYouTube() {
+    const raw = document.getElementById("ytInput").value;
+    const embed = convertToEmbedded(raw);
+    document.getElementById("ytFrame").src = embed;
+}
+
+function loadOther() {
+    const url1 = document.getElementById("url1").value.trim();
+    const url2 = document.getElementById("url2").value.trim();
+
+    document.getElementById("frame1").src = url1 || "about:blank";
+    document.getElementById("frame2").src = url2 || "about:blank";
+}
+
+// Enter key auto-load for YouTube
+document.getElementById("ytInput").addEventListener("keydown", function(e){
+    if (e.key === "Enter") loadYouTube();
+});
+</script>
+
+</body>
+</html>
