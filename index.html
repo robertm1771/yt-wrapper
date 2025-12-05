@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <title>3-Panel YouTube + URL Loader</title>
     <style>
+        :root {
+            --side-width: 35%;
+            --top-height: 60%;
+            --gutter-size: 10px;
+            --handle-color: #2a2a2a;
+        }
+
         html, body {
             margin: 0;
             padding: 0;
@@ -83,12 +90,13 @@
         #layout {
             height: calc(100% - 60px);
             display: grid;
-            grid-template-columns: 2fr 1fr;
-            grid-template-rows: minmax(0, 1fr) minmax(0, 0.6fr);
+            position: relative;
+            grid-template-columns: calc(100% - var(--side-width)) var(--side-width);
+            grid-template-rows: var(--top-height) calc(100% - var(--top-height));
             grid-template-areas:
                 "youtube side"
                 "bottom bottom";
-            gap: 8px;
+            gap: var(--gutter-size);
             padding: 8px;
             box-sizing: border-box;
         }
@@ -115,6 +123,36 @@
             border: none;
             background: #000;
         }
+
+        .resize-handle {
+            position: absolute;
+            background: var(--handle-color);
+            z-index: 5;
+            opacity: 0.7;
+            transition: background 0.2s ease, opacity 0.2s ease;
+        }
+
+        .resize-handle:hover,
+        .resize-handle:active {
+            background: #3a3a3a;
+            opacity: 1;
+        }
+
+        .resize-handle.vertical {
+            top: 8px;
+            bottom: 8px;
+            width: var(--gutter-size);
+            left: calc(100% - var(--side-width));
+            cursor: col-resize;
+        }
+
+        .resize-handle.horizontal {
+            left: 8px;
+            right: 8px;
+            height: var(--gutter-size);
+            top: var(--top-height);
+            cursor: row-resize;
+        }
     </style>
 </head>
 <body>
@@ -135,7 +173,7 @@
 
         <div id="status" aria-live="polite"></div>
 
-        <div class="version" aria-label="Application version" id="appVersion">v0.2.0</div>
+        <div class="version" aria-label="Application version" id="appVersion">v0.3.0</div>
     </div>
 
     <div id="layout">
@@ -149,6 +187,9 @@
 
         <iframe class="side-pane" id="frame1"></iframe>
         <iframe class="bottom-pane" id="frame2"></iframe>
+
+        <div class="resize-handle vertical" id="verticalHandle" title="Drag to resize side panel"></div>
+        <div class="resize-handle horizontal" id="horizontalHandle" title="Drag to resize bottom panel"></div>
     </div>
 
 <script>
@@ -204,8 +245,14 @@ function setFrameSrc(frameId, url) {
     }
 }
 
-const APP_VERSION = "v0.2.0";
+const APP_VERSION = "v0.3.0";
 const RIGHT_PANELS_KEY = "yt-wrapper:right-panels";
+const LAYOUT_KEY = "yt-wrapper:layout";
+const DEFAULT_LAYOUT = {
+    sideWidth: 35,
+    topHeight: 60,
+};
+let layoutState = { ...DEFAULT_LAYOUT };
 
 function renderVersion() {
     const versionEl = document.getElementById("appVersion");
@@ -245,6 +292,78 @@ function restoreRightPanels() {
     } catch (e) {
         console.warn("Unable to restore right panel URLs", e);
     }
+}
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+
+function applyLayout({ sideWidth = layoutState.sideWidth, topHeight = layoutState.topHeight } = {}) {
+    const newSideWidth = clamp(sideWidth, 15, 85);
+    const newTopHeight = clamp(topHeight, 25, 85);
+
+    layoutState = {
+        sideWidth: newSideWidth,
+        topHeight: newTopHeight,
+    };
+
+    document.documentElement.style.setProperty("--side-width", `${newSideWidth}%`);
+    document.documentElement.style.setProperty("--top-height", `${newTopHeight}%`);
+}
+
+function persistLayout() {
+    try {
+        localStorage.setItem(LAYOUT_KEY, JSON.stringify(layoutState));
+    } catch (e) {
+        console.warn("Unable to persist layout", e);
+    }
+}
+
+function restoreLayoutSizing() {
+    try {
+        const raw = localStorage.getItem(LAYOUT_KEY);
+        if (!raw) {
+            applyLayout(DEFAULT_LAYOUT);
+            return;
+        }
+
+        const saved = JSON.parse(raw);
+        applyLayout({
+            sideWidth: saved.sideWidth ?? DEFAULT_LAYOUT.sideWidth,
+            topHeight: saved.topHeight ?? DEFAULT_LAYOUT.topHeight,
+        });
+    } catch (e) {
+        console.warn("Unable to restore layout", e);
+        applyLayout(DEFAULT_LAYOUT);
+    }
+}
+
+function startResize(type, event) {
+    event.preventDefault();
+    const layout = document.getElementById("layout");
+
+    function onMove(e) {
+        const rect = layout.getBoundingClientRect();
+
+        if (type === "vertical") {
+            const offset = clamp(e.clientX - rect.left, 80, rect.width - 80);
+            const sideWidth = 100 - ((offset / rect.width) * 100);
+            applyLayout({ sideWidth });
+        } else if (type === "horizontal") {
+            const offset = clamp(e.clientY - rect.top, 80, rect.height - 80);
+            const topHeight = (offset / rect.height) * 100;
+            applyLayout({ topHeight });
+        }
+    }
+
+    function onUp() {
+        persistLayout();
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+    }
+
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
 }
 
 function loadYouTube() {
@@ -324,6 +443,14 @@ document.getElementById("url2").addEventListener("keydown", function(e){
     if (e.key === "Enter") loadOther();
 });
 
+document.getElementById("verticalHandle").addEventListener("pointerdown", function(e){
+    startResize("vertical", e);
+});
+
+document.getElementById("horizontalHandle").addEventListener("pointerdown", function(e){
+    startResize("horizontal", e);
+});
+
 function showStatus(message, isError = false) {
     const el = document.getElementById("status");
     el.textContent = message;
@@ -331,6 +458,7 @@ function showStatus(message, isError = false) {
 }
 
 renderVersion();
+restoreLayoutSizing();
 restoreRightPanels();
 showStatus(`Ready · ${APP_VERSION}`);
 </script>
