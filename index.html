@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3-Panel YouTube + URL Loader</title>
+    <title>3-Panel URL Loader</title>
     <style>
         :root {
             --side-width: 35%;
@@ -99,15 +99,15 @@
             grid-template-columns: calc(100% - var(--side-width)) var(--side-width);
             grid-template-rows: var(--top-height) calc(100% - var(--top-height));
             grid-template-areas:
-                "youtube side"
+                "main side"
                 "bottom bottom";
             gap: var(--gutter-size);
             padding: 8px;
             box-sizing: border-box;
         }
 
-        .youtube-pane {
-            grid-area: youtube;
+        .main-pane {
+            grid-area: main;
         }
 
         .side-pane {
@@ -165,9 +165,9 @@
 
     <div id="controls">
         <div>
-            <input id="ytInput" type="text" placeholder="Paste YouTube link here (watch, live, or youtu.be)">
-            <button onclick="loadYouTube()">Load YouTube</button>
-            <button onclick="refreshYouTube()">Refresh YouTube</button>
+            <input id="leftUrl" type="text" placeholder="Left frame URL">
+            <button onclick="loadLeftFrame()">Load Left Frame</button>
+            <button onclick="refreshLeftFrame()">Refresh Left Frame</button>
         </div>
 
         <div>
@@ -185,8 +185,8 @@
     <div id="layout">
         <!-- NOTE: referrerpolicy added here -->
         <iframe
-            class="youtube-pane"
-            id="ytFrame"
+            class="main-pane"
+            id="leftFrame"
             allowfullscreen
             referrerpolicy="strict-origin-when-cross-origin">
         </iframe>
@@ -199,48 +199,38 @@
     </div>
 
 <script>
-function convertToEmbedded(url) {
-    if (!url) return "";
+const APP_VERSION = "v0.3.0";
+const FRAME_LABELS = {
+    leftFrame: "Left frame",
+    frame1: "Right frame",
+    frame2: "Bottom frame",
+};
+const PLACEHOLDER_STYLE = "body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#06090f;color:#7bd6ff;display:flex;align-items:center;justify-content:center;height:100%;}main{display:flex;flex-direction:column;gap:8px;align-items:center;max-width:420px;text-align:center;padding:16px;}h1{font-size:18px;font-weight:700;margin:0;color:#c6e8ff;}p{margin:0;font-size:14px;color:#9acffb;line-height:1.4;}";
+const LEFT_PANEL_KEY = "yt-wrapper:left-panel";
+const RIGHT_PANELS_KEY = "yt-wrapper:right-panels";
+const LAYOUT_KEY = "yt-wrapper:layout";
+const DEFAULT_LAYOUT = {
+    sideWidth: 35,
+    topHeight: 60,
+};
+let layoutState = { ...DEFAULT_LAYOUT };
 
-    url = url.trim();
-
-    // Already embed
-    if (url.includes("youtube.com/embed/") || url.includes("youtube-nocookie.com/embed/")) {
-        return url;
-    }
-
-    try {
-        const u = new URL(url);
-
-        // Standard watch URL
-        if (u.hostname.includes("youtube.com") && u.pathname === "/watch") {
-            const id = u.searchParams.get("v");
-            if (id) return "https://www.youtube-nocookie.com/embed/" + id;
-        }
-
-        // youtu.be short link
-        if (u.hostname === "youtu.be") {
-            const id = u.pathname.replace("/", "");
-            if (id) return "https://www.youtube-nocookie.com/embed/" + id;
-        }
-
-        // Live URL
-        if (u.hostname.includes("youtube.com") && u.pathname.startsWith("/live/")) {
-            const id = u.pathname.split("/")[2];
-            if (id) return "https://www.youtube-nocookie.com/embed/" + id;
-        }
-    } catch (e) {
-        console.error("Invalid URL:", e);
-    }
-
-    // Fallback
-    return url;
+function placeholderMarkup(label = "Frame") {
+    return `<html><head><style>${PLACEHOLDER_STYLE}</style></head><body><main><h1>${label} is empty</h1><p>Enter a URL above and click the load button to display it here.</p></main></body></html>`;
 }
 
 function setFrameSrc(frameId, url) {
     const frame = document.getElementById(frameId);
-    const target = url || "about:blank";
+    const target = url || "";
     const current = frame.getAttribute("src") || "";
+
+    if (!target) {
+        frame.removeAttribute("src");
+        frame.srcdoc = placeholderMarkup(FRAME_LABELS[frameId] || "Frame");
+        return;
+    }
+
+    frame.removeAttribute("srcdoc");
 
     // Force reload even if the same URL is entered again.
     if (current === target) {
@@ -251,15 +241,6 @@ function setFrameSrc(frameId, url) {
     }
 }
 
-const APP_VERSION = "v0.3.0";
-const RIGHT_PANELS_KEY = "yt-wrapper:right-panels";
-const LAYOUT_KEY = "yt-wrapper:layout";
-const DEFAULT_LAYOUT = {
-    sideWidth: 35,
-    topHeight: 60,
-};
-let layoutState = { ...DEFAULT_LAYOUT };
-
 function renderVersion() {
     const versionEl = document.getElementById("appVersion");
     if (versionEl) {
@@ -267,7 +248,36 @@ function renderVersion() {
         versionEl.setAttribute("data-version", APP_VERSION);
     }
 
-    document.title = `3-Panel YouTube + URL Loader (${APP_VERSION})`;
+    document.title = `3-Panel URL Loader (${APP_VERSION})`;
+}
+
+function persistLeftPanel(url) {
+    try {
+        localStorage.setItem(LEFT_PANEL_KEY, JSON.stringify({ url }));
+    } catch (e) {
+        console.warn("Unable to persist left panel URL", e);
+    }
+}
+
+function restoreLeftPanel() {
+    try {
+        const raw = localStorage.getItem(LEFT_PANEL_KEY);
+        if (!raw) return;
+
+        const { url = "" } = JSON.parse(raw);
+
+        document.getElementById("leftUrl").value = url;
+
+        if (url) {
+            setFrameSrc("leftFrame", url);
+            showStatus("Restored left frame.");
+        }
+        if (!url) {
+            setFrameSrc("leftFrame", "");
+        }
+    } catch (e) {
+        console.warn("Unable to restore left panel URL", e);
+    }
 }
 
 function persistRightPanels(url1, url2) {
@@ -289,8 +299,8 @@ function restoreRightPanels() {
         document.getElementById("url1").value = url1;
         document.getElementById("url2").value = url2;
 
-        if (url1) setFrameSrc("frame1", url1);
-        if (url2) setFrameSrc("frame2", url2);
+        setFrameSrc("frame1", url1);
+        setFrameSrc("frame2", url2);
 
         if (url1 || url2) {
             showStatus("Restored right-side panels.");
@@ -386,16 +396,12 @@ function startResize(type, event) {
     document.addEventListener("pointerup", onUp);
 }
 
-function loadYouTube() {
-    const raw = document.getElementById("ytInput").value;
-    const embed = convertToEmbedded(raw);
+function loadLeftFrame() {
+    const url = document.getElementById("leftUrl").value.trim();
 
-    if (!embed) {
-        return showStatus("Please enter a YouTube link first.", true);
-    }
-
-    setFrameSrc("ytFrame", embed);
-    showStatus("YouTube video loaded.");
+    setFrameSrc("leftFrame", url);
+    persistLeftPanel(url);
+    showStatus(url ? "Left frame loaded." : "Left frame cleared.");
 }
 
 function loadOther() {
@@ -410,24 +416,19 @@ function loadOther() {
     showStatus(!url1 && !url2 ? "Right side cleared." : "Right side loaded.");
 }
 
-function refreshYouTube() {
-    const ytFrame = document.getElementById("ytFrame");
-    const current = ytFrame.getAttribute("src");
-    const input = document.getElementById("ytInput").value.trim();
+function refreshLeftFrame() {
+    const current = document.getElementById("leftFrame").getAttribute("src");
+    const input = document.getElementById("leftUrl").value.trim();
 
-    if (current) {
-        setFrameSrc("ytFrame", current);
-        showStatus("YouTube refreshed.");
+    const target = current || input;
+
+    if (!target) {
+        showStatus("Nothing to refresh on left side.", true);
         return;
     }
 
-    const embed = convertToEmbedded(input);
-    if (embed) {
-        setFrameSrc("ytFrame", embed);
-        showStatus("YouTube loaded and refreshed.");
-    } else {
-        showStatus("Nothing to refresh for YouTube.", true);
-    }
+    setFrameSrc("leftFrame", target);
+    showStatus("Left frame refreshed.");
 }
 
 function refreshRightFrames() {
@@ -445,9 +446,15 @@ function refreshRightFrames() {
     showStatus("Right side refreshed.");
 }
 
-// Enter key auto-load for YouTube
-document.getElementById("ytInput").addEventListener("keydown", function(e){
-    if (e.key === "Enter") loadYouTube();
+function renderInitialPlaceholders() {
+    setFrameSrc("leftFrame", "");
+    setFrameSrc("frame1", "");
+    setFrameSrc("frame2", "");
+}
+
+// Enter key auto-load for left frame
+document.getElementById("leftUrl").addEventListener("keydown", function(e){
+    if (e.key === "Enter") loadLeftFrame();
 });
 
 // Enter key auto-load for the right-side URLs
@@ -475,6 +482,8 @@ function showStatus(message, isError = false) {
 
 renderVersion();
 restoreLayoutSizing();
+renderInitialPlaceholders();
+restoreLeftPanel();
 restoreRightPanels();
 showStatus(`Ready · ${APP_VERSION}`);
 </script>
