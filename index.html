@@ -146,7 +146,8 @@
 
         .resize-handle.vertical {
             top: 8px;
-            bottom: 8px;
+            bottom: auto;
+            height: calc(var(--top-height) + (var(--gutter-size) / 2));
             width: var(--gutter-size);
             left: calc(100% - var(--side-width));
             cursor: col-resize;
