@@ -167,15 +167,9 @@
     <div id="controls">
         <div>
             <input id="leftUrl" type="text" placeholder="Left frame URL">
-            <button onclick="loadLeftFrame()">Load Left Frame</button>
-            <button onclick="refreshLeftFrame()">Refresh Left Frame</button>
-        </div>
-
-        <div>
             <input id="url1" type="text" placeholder="Right-side URL">
             <input id="url2" type="text" placeholder="Bottom URL">
-            <button onclick="loadOther()">Load Right Frames</button>
-            <button onclick="refreshRightFrames()">Refresh Right Frames</button>
+            <button onclick="loadOrRefreshAll()">Load/Refresh All</button>
         </div>
 
         <div id="status" aria-live="polite"></div>
@@ -397,54 +391,35 @@ function startResize(type, event) {
     document.addEventListener("pointerup", onUp);
 }
 
-function loadLeftFrame() {
-    const url = document.getElementById("leftUrl").value.trim();
+function loadOrRefreshAll() {
+    const leftUrl = document.getElementById("leftUrl").value.trim();
+    const rightUrl = document.getElementById("url1").value.trim();
+    const bottomUrl = document.getElementById("url2").value.trim();
 
-    setFrameSrc("leftFrame", url);
-    persistLeftPanel(url);
-    showStatus(url ? "Left frame loaded." : "Left frame cleared.");
-}
+    const messages = [];
 
-function loadOther() {
-    const url1 = document.getElementById("url1").value.trim();
-    const url2 = document.getElementById("url2").value.trim();
+    setFrameSrc("leftFrame", leftUrl);
+    persistLeftPanel(leftUrl);
+    messages.push(leftUrl ? "Left frame loaded." : "Left frame cleared.");
 
-    setFrameSrc("frame1", url1);
-    setFrameSrc("frame2", url2);
+    if (!rightUrl && !bottomUrl) {
+        setFrameSrc("frame1", "");
+        setFrameSrc("frame2", "");
+        persistRightPanels("", "");
+        messages.push("No right URLs provided.");
+    } else {
+        setFrameSrc("frame1", rightUrl);
+        setFrameSrc("frame2", bottomUrl);
+        persistRightPanels(rightUrl, bottomUrl);
 
-    persistRightPanels(url1, url2);
-
-    showStatus(!url1 && !url2 ? "Right side cleared." : "Right side loaded.");
-}
-
-function refreshLeftFrame() {
-    const current = document.getElementById("leftFrame").getAttribute("src");
-    const input = document.getElementById("leftUrl").value.trim();
-
-    const target = current || input;
-
-    if (!target) {
-        showStatus("Nothing to refresh on left side.", true);
-        return;
+        const loadedFrames = [];
+        if (rightUrl) loadedFrames.push("Right frame");
+        if (bottomUrl) loadedFrames.push("Bottom frame");
+        const label = loadedFrames.length === 2 ? "Right frames" : loadedFrames[0];
+        messages.push(`${label} refreshed.`);
     }
 
-    setFrameSrc("leftFrame", target);
-    showStatus("Left frame refreshed.");
-}
-
-function refreshRightFrames() {
-    const url1 = document.getElementById("frame1").getAttribute("src") || document.getElementById("url1").value.trim();
-    const url2 = document.getElementById("frame2").getAttribute("src") || document.getElementById("url2").value.trim();
-
-    if (!url1 && !url2) {
-        showStatus("Nothing to refresh on right side.", true);
-        return;
-    }
-
-    if (url1) setFrameSrc("frame1", url1);
-    if (url2) setFrameSrc("frame2", url2);
-
-    showStatus("Right side refreshed.");
+    showStatus(messages.join(" · "));
 }
 
 function renderInitialPlaceholders() {
@@ -453,18 +428,17 @@ function renderInitialPlaceholders() {
     setFrameSrc("frame2", "");
 }
 
-// Enter key auto-load for left frame
+// Enter key auto-load for all URLs
 document.getElementById("leftUrl").addEventListener("keydown", function(e){
-    if (e.key === "Enter") loadLeftFrame();
+    if (e.key === "Enter") loadOrRefreshAll();
 });
 
-// Enter key auto-load for the right-side URLs
 document.getElementById("url1").addEventListener("keydown", function(e){
-    if (e.key === "Enter") loadOther();
+    if (e.key === "Enter") loadOrRefreshAll();
 });
 
 document.getElementById("url2").addEventListener("keydown", function(e){
-    if (e.key === "Enter") loadOther();
+    if (e.key === "Enter") loadOrRefreshAll();
 });
 
 document.getElementById("verticalHandle").addEventListener("pointerdown", function(e){
